@@ -304,3 +304,41 @@ footer {
         height: 80px
     }
 }
+
+/* --- Submit state & spinner (nyambung dengan script.js) --- */
+button:disabled{
+  opacity: .7;
+  cursor: not-allowed;
+  filter: saturate(.8);
+  box-shadow: none;
+}
+
+/* khusus tombol submit kita */
+#btnSubmit.loading{
+  position: relative;
+  pointer-events: none;
+}
+#btnSubmit.loading::after{
+  content:"";
+  position:absolute;
+  right:12px;
+  top:50%;
+  transform: translateY(-50%);
+  width:16px; height:16px;
+  border-radius:50%;
+  border:2px solid rgba(255,255,255,.95);
+  border-top-color: transparent;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+/* (opsional) biar hover nggak lompat-lompat */
+section:hover, .question:hover{
+  transform: translateY(-1px);
+}
+
+/* (opsional) rapihin table rounding */
+#jadwalContainer table{
+  border-radius: 10px;
+  overflow: hidden;
+}

@@ -1,342 +1,417 @@
-const webhookURL = "https://script.google.com/macros/s/AKfycbx0hp6eIUY8xLxi0fEY_mX1LQK43OwuW3b-2kucLHj6a6nsceRMES4Sy2I8S-o5AEzsBg/exec";
+// ================== CONFIG ==================
+const webhookURL = "https://script.google.com/macros/s/AKfycby3laK4tFQr1aKxN8kKM4fXc3Fod9hZSVMPh6RLZG6Lk2wdIguz5xR-QU9DXNBPYP-kFQ/exec";
+// ============================================
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Elemen yang DIHARAPKAN ADA di HTML:
-    // - radio name="penghuni" (value: "ya"/"tidak")
-    // - formPenghuni, formNonPenghuni, formAktivitas, formSenam, grupSenam, jadwalContainer, formUmum, kegiatanLain
-    // - select#jamMulai, select#jamSelesai, input[name="tanggal"] (untuk non-senam)
-    // - form#reservasiForm, button#btnSubmit
+  // ---------- Mini helpers ----------
+  const $id = (id) => document.getElementById(id);
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-    const penghuniInputs = document.querySelectorAll('input[name="penghuni"]');
-    const formPenghuni = document.getElementById("formPenghuni");
-    const formNonPenghuni = document.getElementById("formNonPenghuni");
-    const formAktivitas = document.getElementById("formAktivitas");
-    const formSenam = document.getElementById("formSenam");
-    const grupSenam = document.getElementById("grupSenam");
-    const jadwalContainer = document.getElementById("jadwalContainer");
-    const formUmum = document.getElementById("formUmum");
-    const kegiatanLain = document.getElementById("kegiatanLain");
-    const jamMulai = document.getElementById("jamMulai");
-    const jamSelesai = document.getElementById("jamSelesai");
-    const reservasiForm = document.getElementById("reservasiForm");
-    const btnSubmit = document.getElementById("btnSubmit");
+  // ---------- Map hari ----------
+  const DOW = { "Minggu":0, "Senin":1, "Selasa":2, "Rabu":3, "Kamis":4, "Jumat":5, "Sabtu":6 };
+  const cloneDate = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const nextWeekdayFrom = (baseDate, targetDow) => {
+    const d = cloneDate(baseDate);
+    const delta = (targetDow + 7 - d.getDay()) % 7;
+    d.setDate(d.getDate() + delta);
+    return d;
+  };
+  const allWeekdaysInMonth = (year, monthIndex, targetDow) => {
+    const res = [];
+    const d = new Date(year, monthIndex, 1);
+    const delta = (targetDow + 7 - d.getDay()) % 7;
+    d.setDate(d.getDate() + delta);
+    while (d.getMonth() === monthIndex) {
+      res.push(new Date(d));
+      d.setDate(d.getDate() + 7);
+    }
+    return res;
+  };
 
-    // generate jam 30 menit
+  // ---------- Elemen DOM ----------
+  const reservasiForm = $id("reservasiForm");
+  const formPenghuni = $id("formPenghuni");
+  const formNonPenghuni = $id("formNonPenghuni");
+  const formAktivitas = $id("formAktivitas");
+  const formSenam = $id("formSenam");
+  const grupSenam = $id("grupSenam");
+  const jadwalContainer = $id("jadwalContainer");
+  const formUmum = $id("formUmum");
+  const kegiatanLain = $id("kegiatanLain");
+  const jamMulai = $id("jamMulai");
+  const jamSelesai = $id("jamSelesai");
+  const btnSubmit = $id("btnSubmit");
+
+  // ---------- Generate jam ----------
+  if (jamMulai && jamSelesai) {
     for (let h = 6; h <= 22; h++) {
-        for (let m of ["00", "30"]) {
-            const t = `${String(h).padStart(2, "0")}:${m}`;
-            jamMulai.innerHTML += `<option value="${t}">${t}</option>`;
-            jamSelesai.innerHTML += `<option value="${t}">${t}</option>`;
-        }
+      for (const m of ["00","30"]) {
+        const t = `${String(h).padStart(2,"0")}:${m}`;
+        jamMulai.insertAdjacentHTML("beforeend", `<option value="${t}">${t}</option>`);
+        jamSelesai.insertAdjacentHTML("beforeend", `<option value="${t}">${t}</option>`);
+      }
+    }
+  }
+
+  // ---------- Utils UI ----------
+  const clearInputs = (element) => {
+    if (!element) return;
+    element.querySelectorAll("input, select, textarea").forEach(i => {
+      if (i.type === "radio" || i.type === "checkbox") i.checked = false;
+      else i.value = "";
+    });
+  };
+
+  function updateFormState() {
+    $$("#reservasiForm input, #reservasiForm select, #reservasiForm textarea").forEach(i => {
+      const hiddenParent = i.closest(".hidden");
+      i.disabled = hiddenParent !== null;
+    });
+  }
+
+  function validateForm() {
+    if (!btnSubmit) return;
+    let ok = true;
+
+    const penghuniVal = ($('input[name="penghuni"]:checked', reservasiForm) || {}).value;
+    const aktivitas   = ($('input[name="aktivitas"]:checked', reservasiForm) || {}).value;
+
+    if (!penghuniVal) ok = false;
+    if (penghuniVal === "ya") {
+      ["nama_penghuni","unit_penghuni","wa_penghuni"].forEach(n=>{
+        const el = $(`[name="${n}"]`, reservasiForm);
+        if (!el || !el.value.trim()) ok = false;
+      });
+    } else if (penghuniVal === "tidak") {
+      ["nama_non","wa_non"].forEach(n=>{
+        const el = $(`[name="${n}"]`, reservasiForm);
+        if (!el || !el.value.trim()) ok = false;
+      });
+    } else ok = false;
+
+    if (!aktivitas) ok = false;
+    if (aktivitas === "senam") {
+      if ($$('input[name="hari_senam"]:checked', reservasiForm).length === 0) ok = false;
+    } else if (aktivitas) {
+      const tanggal = $('[name="tanggal"]', reservasiForm);
+      if (!tanggal?.value) ok = false;
+      if (!jamMulai?.value || !jamSelesai?.value) ok = false;
+      if (jamMulai?.value && jamSelesai?.value) {
+        const [h1,m1] = jamMulai.value.split(":").map(Number);
+        const [h2,m2] = jamSelesai.value.split(":").map(Number);
+        if (h2*60+m2 <= h1*60+m1) ok = false;
+      }
     }
 
-    // helpers
-    const hideAll = () => {
-        [formPenghuni, formNonPenghuni, formAktivitas, formSenam, formUmum, kegiatanLain].forEach(el => el.classList.add("hidden"));
-        jadwalContainer.innerHTML = "";
-        updateFormState();
-        validateForm();
-    };
-    const clearInputs = (element) => {
-        if (!element) return;
-        element.querySelectorAll("input, select, textarea").forEach(i => {
-            if (i.type === "radio" || i.type === "checkbox") i.checked = false;
-            else i.value = "";
-        });
-    };
-    function updateFormState() {
-        document.querySelectorAll("#reservasiForm input, #reservasiForm select, #reservasiForm textarea").forEach(i => {
-            const hiddenParent = i.closest(".hidden");
-            i.disabled = hiddenParent !== null;
-        });
-    }
+    btnSubmit.disabled = !ok;
+  }
 
-    function validateForm() {
-        let ok = true;
-        const aktivitasChecked = (reservasiForm.querySelector('input[name="aktivitas"]:checked') || {}).value;
-        const penghuniVal = (reservasiForm.querySelector('input[name="penghuni"]:checked') || {}).value;
-
-        if (!penghuniVal) ok = false;
-        if (penghuniVal === "ya") {
-            ["nama_penghuni", "unit_penghuni", "wa_penghuni"].forEach(n => {
-                const el = reservasiForm.querySelector(`[name="${n}"]`);
-                if (!el || !el.value.trim()) ok = false;
-            });
-        } else if (penghuniVal === "tidak") {
-            ["nama_non", "wa_non"].forEach(n => {
-                const el = reservasiForm.querySelector(`[name="${n}"]`);
-                if (!el || !el.value.trim()) ok = false;
-            });
-        }
-
-        if (!aktivitasChecked) ok = false;
-        if (aktivitasChecked === "senam") {
-            const checked = reservasiForm.querySelectorAll('input[name="hari_senam"]:checked');
-            if (checked.length === 0) ok = false;
-        } else if (aktivitasChecked) {
-            const tanggal = reservasiForm.querySelector('input[name="tanggal"]');
-            if (!tanggal?.value) ok = false;
-            if (!jamMulai?.value || !jamSelesai?.value) ok = false;
-        }
-
-        btnSubmit.disabled = !ok;
-    }
-
-    // penghuni/non
-    penghuniInputs.forEach(input => {
-        input.addEventListener("change", () => {
-            hideAll();
-            clearInputs(formPenghuni);
-            clearInputs(formNonPenghuni);
-            clearInputs(formAktivitas);
-            clearInputs(formSenam);
-            clearInputs(formUmum);
-            if (input.value === "ya") formPenghuni.classList.remove("hidden");
-            else formNonPenghuni.classList.remove("hidden");
-            updateFormState();
-            validateForm();
-        });
-    });
-
-    // aktifkan form aktivitas setelah identitas lengkap
-    document.querySelectorAll("#formPenghuni input, #formNonPenghuni input").forEach(inp => {
-        inp.addEventListener("input", () => {
-            const activeForm = document.querySelector('input[name="penghuni"]:checked');
-            if (
-                activeForm?.value === "ya" &&
-                [...formPenghuni.querySelectorAll("input")].every(f => f.value.trim() !== "")
-            ) formAktivitas.classList.remove("hidden");
-            else if (
-                activeForm?.value === "tidak" &&
-                [...formNonPenghuni.querySelectorAll("input")].every(f => f.value.trim() !== "")
-            ) formAktivitas.classList.remove("hidden");
-            updateFormState();
-            validateForm();
-        });
-    });
-
-    // aktivitas switch
-    document.querySelectorAll('input[name="aktivitas"]').forEach(a => {
-        a.addEventListener("change", () => {
-            formSenam.classList.add("hidden");
-            formUmum.classList.add("hidden");
-            kegiatanLain.classList.add("hidden");
-            jadwalContainer.innerHTML = "";
-            clearInputs(formSenam);
-            clearInputs(formUmum);
-
-            const val = a.value;
-            if (val === "senam") formSenam.classList.remove("hidden");
-            else {
-                formUmum.classList.remove("hidden");
-                if (val === "lain-lain") kegiatanLain.classList.remove("hidden");
-            }
-            updateFormState();
-            validateForm();
-        });
-    });
-
-    // kuota senam (tabel)
-    grupSenam.addEventListener("change", async () => {
-        const g = grupSenam.value;
-        jadwalContainer.innerHTML = "<p>Mengambil data kuota...</p>";
-
-        try {
-            const res = await fetch(webhookURL);
-            const counts = await res.json();
-            const maxKuota = 10;
-
-            const jadwalBuLinda = [
-                { hari: "Senin", jam: "10.00–11.30" },
-                { hari: "Rabu", jam: "10.00–11.30" },
-                { hari: "Jumat", jam: "10.00–11.30" }
-            ];
-            const jadwalBuRetno = [
-                { hari: "Selasa", jam: "10.00–11.30" },
-                { hari: "Kamis", jam: "10.00–11.30" },
-                { hari: "Sabtu", jam: "10.00–11.30" }
-            ];
-            const jadwalList = g === "bu linda" ? jadwalBuLinda : jadwalBuRetno;
-
-            let html = `
-        <p><b>Pilih Hari (maks 10 orang per jadwal):</b></p>
-        <table>
-          <tr><th></th><th>Hari & Waktu</th><th>Kuota</th></tr>
-      `;
-            jadwalList.forEach(j => {
-                const jumlah = counts[j.hari] || 0;
-                const full = jumlah >= maxKuota;
-                html += `
-          <tr class="${full ? 'disabled' : ''}">
-            <td><input type="checkbox" name="hari_senam" value="${j.hari}" ${full ? 'disabled' : ''}></td>
-            <td>${j.hari} (${j.jam})</td>
-            <td>${full ? '<span class="full-tag">Penuh</span>' : `<small>${jumlah}/10</small>`}</td>
-          </tr>
-        `;
-            });
-            html += `
-        </table>
-        <label class="bookAll" style="margin-top:10px; display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" name="full_month" value="true">
-          Booking untuk semua minggu (sesuai aturan)
-        </label>
-      `;
-            jadwalContainer.innerHTML = html;
-        } catch (err) {
-            jadwalContainer.innerHTML = "<p style='color:red'>Gagal mengambil kuota 😭</p>";
-            console.error(err);
-        }
-
-        updateFormState();
-        validateForm();
-    });
-
-    // VALIDATOR live
-    reservasiForm.addEventListener("input", validateForm);
-
-    // SUBMIT
-    reservasiForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        if (btnSubmit.disabled) return;
-
-        const enabledElements = Array.from(reservasiForm.elements).filter(el => !el.disabled);
-        const data = {};
-        enabledElements.forEach(el => {
-            if (!el.name) return;
-            if (el.type === "checkbox") {
-                if (!data[el.name]) data[el.name] = [];
-                if (el.checked) data[el.name].push(el.value);
-            } else if (el.type === "radio") {
-                if (el.checked) data[el.name] = el.value;
-            } else {
-                data[el.name] = el.value;
-            }
-        });
-
-        // --- SENAM: aturan full-book yang kamu minta ---
-        if (data.aktivitas === "senam") {
-            const dayMap = {
-                "Minggu": 0, "Senin": 1, "Selasa": 2, "Rabu": 3,
-                "Kamis": 4, "Jumat": 5, "Sabtu": 6
-            };
-            const hariDipilih = Array.isArray(data.hari_senam) ? data.hari_senam : (data.hari_senam ? [data.hari_senam] : []);
-            const fullMonthChecked = Array.isArray(data.full_month) ? data.full_month.includes("true") : (data.full_month === "true");
-
-            const now = new Date();
-            const thisMonth = now.getMonth();
-            const thisYear = now.getFullYear();
-
-            const nextOccurrence = (weekday) => {
-                const target = new Date(now);
-                const targetDow = dayMap[weekday];
-                while (target.getDay() !== targetDow) target.setDate(target.getDate() + 1);
-                return target;
-            };
-            const allWeekdaysInMonth = (year, month, weekday) => {
-                const res = [];
-                const d = new Date(year, month, 1);
-                const targetDow = dayMap[weekday];
-                while (d.getDay() !== targetDow) d.setDate(d.getDate() + 1);
-                while (d.getMonth() === month) {
-                    res.push(new Date(d));
-                    d.setDate(d.getDate() + 7);
-                }
-                return res;
-            };
-
-            const tanggalList = [];
-            for (const h of hariDipilih) {
-                const first = nextOccurrence(h);
-                if (fullMonthChecked) {
-                    if (first.getMonth() === thisMonth && first.getFullYear() === thisYear) {
-                        // masih bulan ini => hanya 1 tanggal (occurrence berikutnya)
-                        tanggalList.push(first.toISOString().split("T")[0]);
-                    } else {
-                        // sudah loncat ke bulan depan => ambil semua weekday tsb di bulan depan
-                        const nextMonthDate = new Date(thisYear, thisMonth + 1, 1);
-                        const year = nextMonthDate.getFullYear();
-                        const month = nextMonthDate.getMonth();
-                        const alls = allWeekdaysInMonth(year, month, h);
-                        alls.forEach(dt => tanggalList.push(dt.toISOString().split("T")[0]));
-                    }
-                } else {
-                    tanggalList.push(first.toISOString().split("T")[0]);
-                }
-            }
-            data.tanggal = [...new Set(tanggalList)].join(", ");
-            data.jam_mulai = "10:00";
-            data.jam_selesai = "11:30";
-        }
-
-        // --- Non-senam: pre-check kuota/overlap ---
-        if (data.aktivitas && data.aktivitas !== "senam") {
-            const q = new URLSearchParams({
-                check: "kuota",
-                aktivitas: data.aktivitas,
-                tanggal: (data.tanggal || "").split(",")[0]?.trim() || "",
-                jam_mulai: data.jam_mulai || "",
-                jam_selesai: data.jam_selesai || "",
-                jumlah_peserta: data.jumlah_peserta || "1"
-            }).toString();
-            try {
-                const pre = await fetch(`${webhookURL}?${q}`);
-                const info = await pre.json();
-                if (info.status === "full") {
-                    alert(`Slot penuh. Kapasitas: ${info.cap}. Sudah terdaftar: ${info.current}.`);
-                    return;
-                }
-                if (info.status === "booked") {
-                    alert(`Slot ini sudah di-booking orang lain. Pilih tanggal/jam lain ya.`);
-                    return;
-                }
-                if (info.status === "too_many") {
-                    alert(`Maksimal peserta ${info.cap} orang untuk aktivitas ini.`);
-                    return;
-                }
-            } catch (err) {
-                alert("Gagal cek kuota. Coba lagi.");
-                return;
-            }
-        }
-
-        // --- Loading state anti double click ---
-        btnSubmit.disabled = true;
-        const prevText = btnSubmit.textContent;
-        btnSubmit.textContent = "Mengirim...";
-        btnSubmit.classList.add("loading");
-
-        try {
-            // console.log("DATA KIRIM:", data);
-            console.log("== PAYLOAD POST ==");
-            console.log(data);
-            console.log("JSON:", JSON.stringify(data));
-            const res = await fetch(webhookURL, { method: "POST", body: JSON.stringify(data) });
-            const result = await res.json();
-            if (result.error) {
-                if (result.error === "full") {
-                    alert(`Slot penuh. Kapasitas: ${result.cap}. Sudah terdaftar: ${result.current}.`);
-                } else if (result.error === "booked") {
-                    alert("Slot ini sudah di-booking orang lain.");
-                } else if (result.error === "too_many") {
-                    alert(`Maksimal peserta ${result.cap} orang.`);
-                } else {
-                    alert("Gagal menyimpan: " + result.error);
-                }
-                return;
-            }
-            alert(result.message || "Reservasi berhasil dikirim!");
-            e.target.reset();
-            hideAll();
-        } catch (err) {
-            alert("Gagal mengirim data. Cek koneksi atau webhook.");
-            console.error(err);
-        } finally {
-            btnSubmit.textContent = prevText;
-            btnSubmit.classList.remove("loading");
-            validateForm(); // re-enable jika form valid
-        }
-    });
-
-    hideAll();
+  const hideAll = () => {
+    [formPenghuni, formNonPenghuni, formAktivitas, formSenam, formUmum, kegiatanLain]
+      .filter(Boolean).forEach(el => el.classList.add("hidden"));
+    if (jadwalContainer) jadwalContainer.innerHTML = "";
+    updateFormState();
     validateForm();
+  };
+
+  if (!reservasiForm) return;
+  hideAll();
+
+  // ---------- Penghuni/Non ----------
+  $$('input[name="penghuni"]').forEach(input => {
+    input.addEventListener("change", () => {
+      hideAll();
+      clearInputs(formPenghuni);
+      clearInputs(formNonPenghuni);
+      clearInputs(formAktivitas);
+      clearInputs(formSenam);
+      clearInputs(formUmum);
+
+      if (input.value === "ya") formPenghuni.classList.remove("hidden");
+      else formNonPenghuni.classList.remove("hidden");
+
+      updateFormState();
+      validateForm();
+    });
+  });
+
+  // ---------- Aktifkan aktivitas saat identitas lengkap ----------
+  $$("#formPenghuni input, #formNonPenghuni input").forEach(inp => {
+    inp.addEventListener("input", () => {
+      const activeForm = $('input[name="penghuni"]:checked');
+      const okPenghuni = [...(formPenghuni?.querySelectorAll("input") || [])].every(f => f.value.trim() !== "");
+      const okNon = [...(formNonPenghuni?.querySelectorAll("input") || [])].every(f => f.value.trim() !== "");
+      if ((activeForm?.value === "ya" && okPenghuni) || (activeForm?.value === "tidak" && okNon)) {
+        formAktivitas.classList.remove("hidden");
+      }
+      updateFormState();
+      validateForm();
+    });
+  });
+
+  // ---------- Aktivitas toggle ----------
+  $$('input[name="aktivitas"]').forEach(a => {
+    a.addEventListener("change", () => {
+      formSenam.classList.add("hidden");
+      formUmum.classList.add("hidden");
+      kegiatanLain.classList.add("hidden");
+      if (jadwalContainer) jadwalContainer.innerHTML = "";
+      clearInputs(formSenam);
+      clearInputs(formUmum);
+
+      const val = a.value;
+      if (val === "senam") formSenam.classList.remove("hidden");
+      else {
+        formUmum.classList.remove("hidden");
+        if (val === "lain-lain") kegiatanLain.classList.remove("hidden");
+      }
+      updateFormState();
+      validateForm();
+    });
+  });
+
+  // ---------- Kuota Senam (GET doGet) ----------
+  if (grupSenam) {
+    grupSenam.addEventListener("change", async () => {
+      const g = grupSenam.value;
+      if (!jadwalContainer) return;
+      jadwalContainer.innerHTML = "<p>Mengambil data kuota...</p>";
+
+      try {
+        const res = await fetch(webhookURL); // doGet default -> kuota senam next occurrence
+        const counts = await res.json();
+        const maxKuota = counts.senamCap || 10;
+
+        const jadwalBuLinda = [
+          { hari: "Senin", jam: "10.00–11.30" },
+          { hari: "Rabu", jam: "10.00–11.30" },
+          { hari: "Jumat", jam: "10.00–11.30" }
+        ];
+        const jadwalBuRetno = [
+          { hari: "Selasa", jam: "10.00–11.30" },
+          { hari: "Kamis", jam: "10.00–11.30" },
+          { hari: "Sabtu", jam: "10.00–11.30" }
+        ];
+        const jadwalList = g === "bu linda" ? jadwalBuLinda : jadwalBuRetno;
+
+        const nextDates = counts.nextDates || {}; // kalau nanti kamu aktifkan di backend
+
+        let html = `
+          <p><b>Pilih Hari (maks ${maxKuota} orang per jadwal):</b></p>
+          <table>
+            <tr><th></th><th>Hari & Waktu</th><th>Kuota</th></tr>
+        `;
+        jadwalList.forEach(j => {
+          const jumlah = counts[j.hari] || 0;
+          const full = jumlah >= maxKuota;
+          const labelTanggal = nextDates[j.hari] ? ` — ${nextDates[j.hari]}` : "";
+          html += `
+            <tr class="${full ? 'disabled' : ''}">
+              <td><input type="checkbox" name="hari_senam" value="${j.hari}" ${full ? 'disabled' : ''}></td>
+              <td>${j.hari} (${j.jam})<small>${labelTanggal}</small></td>
+              <td>${full ? '<span class="full-tag">Penuh</span>' : `<small>${jumlah}/${maxKuota}</small>`}</td>
+            </tr>
+          `;
+        });
+        html += `
+          </table>
+          <label class="bookAll" style="margin-top:10px; display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" name="full_month" value="true">
+            <span>Booking untuk semua minggu bulan ini (sesuai aturan)</span>
+          </label>
+        `;
+        jadwalContainer.innerHTML = html;
+      } catch (err) {
+        console.error(err);
+        jadwalContainer.innerHTML = "<p style='color:red'>Gagal mengambil kuota 😭</p>";
+      }
+      updateFormState();
+      validateForm();
+    });
+  }
+
+  // ---------- Generator tanggal SENAM ----------
+  function generateSenamTanggal(hariSelected, fullMonthChecked, today = new Date()) {
+    const out = [];
+    hariSelected.forEach(hari => {
+      const dow = DOW[hari];
+      if (dow == null) return;
+
+      const next = nextWeekdayFrom(today, dow);
+
+      if (!fullMonthChecked) {
+        // hanya tanggal terdekat
+        out.push(toISO(next));
+        return;
+      }
+
+      // FULL MONTH: semua weekday di BULAN tempat 'next' jatuh
+      const Y = next.getFullYear();
+      const M = next.getMonth();
+      const all = allWeekdaysInMonth(Y, M, dow);
+      all.forEach(d => out.push(toISO(d)));
+    });
+
+    const uniq = Array.from(new Set(out));
+    uniq.sort();
+    return uniq;
+  }
+
+  // ---------- POST helper (tanpa Content-Type untuk hindari preflight) ----------
+  async function postJSON(url, data) {
+    const res = await fetch(url, {
+      method: "POST",
+      body: JSON.stringify(data),
+      redirect: "follow"
+    });
+    const raw = await res.text();
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} — ${raw.slice(0,200)}`);
+    try { return JSON.parse(raw); }
+    catch { throw new Error("Server did not return JSON: " + raw.slice(0,200)); }
+  }
+
+  // ---------- Precheck non-senam ----------
+  async function precheckNonSenam(aktivitas, tanggal, jm, js, jumlah) {
+    const q = new URLSearchParams({
+      check: "kuota",
+      aktivitas,
+      tanggal,
+      jam_mulai: jm,
+      jam_selesai: js,
+      jumlah_peserta: String(jumlah || 1),
+    });
+    const res = await fetch(`${webhookURL}?${q.toString()}`);
+    return res.json();
+  }
+
+  // ---------- Spinner helpers (selalu aktif saat submit dipencet) ----------
+  const submitBtn = btnSubmit || $("#reservasiForm button[type='submit']");
+  const originalBtnText = submitBtn ? submitBtn.textContent : "Kirim Reservasi";
+  function startLoading(){
+    if (!submitBtn) return;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Mengirim…";
+    submitBtn.classList.add("loading");
+  }
+  function stopLoading(){
+    if (!submitBtn) return;
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalBtnText;
+    submitBtn.classList.remove("loading");
+  }
+
+  // ---------- Submit ----------
+  reservasiForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    // selalu tampilkan animasi begitu tombol dipencet
+    startLoading();
+
+    const enabledElements = Array.from(reservasiForm.elements).filter(el => !el.disabled);
+    const data = {};
+    enabledElements.forEach(el => {
+      if (!el.name) return;
+      if (el.type === "checkbox") {
+        if (!data[el.name]) data[el.name] = [];
+        if (el.checked) data[el.name].push(el.value);
+      } else if (el.type === "radio") {
+        if (el.checked) data[el.name] = el.value;
+      } else {
+        data[el.name] = el.value;
+      }
+    });
+
+    const aktivitas = data.aktivitas;
+
+    // Validasi dasar
+    const penghuniVal = (document.querySelector('input[name="penghuni"]:checked') || {}).value;
+    if (!penghuniVal) { stopLoading(); alert("Pilih penghuni / non-penghuni dulu ya."); return; }
+    if (penghuniVal === "ya") {
+      for (const n of ["nama_penghuni","unit_penghuni","wa_penghuni"]) {
+        if (!data[n] || !String(data[n]).trim()) { stopLoading(); alert("Lengkapi data penghuni dulu, ya."); return; }
+      }
+    } else if (penghuniVal === "tidak") {
+      for (const n of ["nama_non","wa_non"]) {
+        if (!data[n] || !String(data[n]).trim()) { stopLoading(); alert("Lengkapi data non-penghuni dulu, ya."); return; }
+      }
+    }
+    if (!aktivitas) { stopLoading(); alert("Pilih aktivitas dulu, hmph!"); return; }
+
+    // === SENAM ===
+    if (aktivitas === "senam") {
+      const hariDipilih = Array.isArray(data.hari_senam) ? data.hari_senam : (data.hari_senam ? [data.hari_senam] : []);
+      const fullMonthChecked = data.full_month && data.full_month.includes("true");
+
+      if (fullMonthChecked && hariDipilih.length === 0) {
+        stopLoading();
+        alert("Pilih minimal satu hari senam sebelum centang booking sebulan.");
+        return;
+      }
+
+      const today = new Date();
+      const tanggalList = generateSenamTanggal(hariDipilih, !!fullMonthChecked, today);
+      if (tanggalList.length === 0) { stopLoading(); alert("Tidak ada tanggal valid untuk pilihanmu."); return; }
+
+      data.tanggal = tanggalList.join(", ");
+      data.jam_mulai = "10:00";
+      data.jam_selesai = "11:30";
+    }
+
+    // === NON-SENAM ===
+    if (aktivitas !== "senam") {
+      const jm = data.jam_mulai;
+      const js = data.jam_selesai;
+      const tanggal = data.tanggal;
+
+      if (!tanggal || !jm || !js) { stopLoading(); alert("Tanggal dan jam harus diisi."); return; }
+      const [h1,m1] = jm.split(":").map(Number);
+      const [h2,m2] = js.split(":").map(Number);
+      if (h2*60+m2 <= h1*60+m1) { stopLoading(); alert("Jam selesai harus lebih besar dari jam mulai."); return; }
+
+      // Precheck kuota/overlap → spinner tetap ON; kalau fail, matikan lalu keluarin alasan
+      try {
+        const pc = await precheckNonSenam(aktivitas, tanggal, jm, js, data.jumlah_peserta || 1);
+        if (pc.status === "full") {
+          const cap = pc.cap != null ? pc.cap : (aktivitas === "tenis" ? 4 : (aktivitas === "tenis meja" ? 8 : 30));
+          const cur = pc.current != null ? pc.current : cap;
+          stopLoading();
+          alert(`Kuota penuh untuk ${aktivitas} pada ${tanggal} ${jm}–${js}.\nMaks ${cap} orang per satu waktu. Saat ini ${cur}/${cap}.`);
+          return;
+        }
+        if (pc.status === "booked") {
+          stopLoading();
+          alert(`Jadwal ${tanggal} ${jm}–${js} sudah dibooking untuk ${aktivitas}. Pilih jam/tanggal lain ya.`);
+          return;
+        }
+        if (pc.status === "too_many") {
+          const cap2 = pc.cap != null ? pc.cap : 30;
+          stopLoading();
+          alert(`Jumlah peserta melebihi kapasitas (maks ${cap2} orang).`);
+          return;
+        }
+      } catch (err) {
+        console.warn("Precheck gagal, lanjut kirim...", err);
+      }
+    }
+
+    // ==== Kirim (POST) ====
+    try {
+      const result = await postJSON(webhookURL, data);
+      alert(result.message || "Reservasi berhasil dikirim!");
+      e.target.reset();
+      hideAll();
+      updateFormState();
+      validateForm();
+    } catch (err) {
+      console.error(err);
+      alert("Gagal mengirim data: " + err.message);
+    } finally {
+      stopLoading();
+    }
+  });
+
+  reservasiForm.addEventListener("input", validateForm);
+  validateForm();
 });

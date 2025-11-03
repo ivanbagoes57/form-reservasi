@@ -1,137 +1,129 @@
 <!DOCTYPE html>
 <html lang="id">
-
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Form Reservasi Fasilitas Umum</title>
-    <link rel="stylesheet" href="style.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;600;800&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Form Reservasi Fasilitas Umum</title>
+
+  <!-- Icons (opsional, taruh file di /assets) -->
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <meta name="theme-color" content="#0f172a">
+
+  <link rel="stylesheet" href="style.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;600;800&display=swap" rel="stylesheet">
 </head>
-
 <body>
-    <header>
-        <img src="assets/cover.jpg" alt="Form Cover" class="cover" />
-        <img src="assets/logo.png" alt="Logo" class="logo" />
-    </header>
+  <header>
+    <img src="assets/cover.jpg" alt="Form Cover" class="cover"/>
+    <img src="assets/logo.png" alt="Logo" class="logo"/>
+  </header>
 
-    <main>
-        <h1>Form Reservasi Fasilitas Umum</h1>
+  <main>
+    <h1>Form Reservasi Fasilitas Umum</h1>
 
-        <form id="reservasiForm">
+    <form id="reservasiForm">
+      <!-- Q1: Penghuni -->
+      <section class="question">
+        <h3>Apakah Anda penghuni?</h3>
+        <div class="radio-group">
+          <label class="radio-btn"><input type="radio" name="penghuni" value="ya"><span>Penghuni</span></label>
+          <label class="radio-btn"><input type="radio" name="penghuni" value="tidak"><span>Non Penghuni</span></label>
+        </div>
+      </section>
 
-            <section class="question">
-                <h3>Apakah Anda penghuni?</h3>
-                <div class="radio-group">
-                    <label class="radio-btn"><input type="radio" name="penghuni"
-                            value="ya"><span>Penghuni</span></label>
-                    <label class="radio-btn"><input type="radio" name="penghuni" value="tidak"><span>Non
-                            Penghuni</span></label>
-                </div>
-            </section>
+      <!-- Penghuni -->
+      <div id="formPenghuni" class="hidden">
+        <label>Nama
+          <input type="text" name="nama_penghuni" placeholder="Masukkan nama lengkap"
+            pattern="^[A-Za-zÀ-ž\s]{2,50}$" title="Nama hanya huruf & spasi" required>
+        </label>
+        <label>Nomor Unit
+          <input type="text" name="unit_penghuni" placeholder="1.11.0X" pattern="[A-Za-z0-9\.]+"
+            title="Boleh huruf, angka, titik" required>
+        </label>
+        <label>No. WhatsApp
+          <input type="text" name="wa_penghuni" placeholder="0895XXXXXXX" pattern="^0[0-9]{9,12}$"
+            title="Diawali 0, 10–13 digit" required>
+        </label>
+      </div>
 
-            <!-- Penghuni -->
-            <div id="formPenghuni" class="hidden">
-                <label>Nama
-                    <input type="text" name="nama_penghuni" placeholder="Masukkan nama lengkap"
-                        pattern="^[A-Za-zÀ-ž\s]{2,50}$"
-                        title="Nama hanya boleh berisi huruf dan spasi (tanpa angka atau simbol)" required>
-                </label>
+      <!-- Non Penghuni -->
+      <div id="formNonPenghuni" class="hidden">
+        <label>Nama
+          <input type="text" name="nama_non" placeholder="Masukkan nama lengkap"
+            pattern="^[A-Za-zÀ-ž\s]{2,50}$" title="Nama hanya huruf & spasi" required>
+        </label>
+        <label>No. WhatsApp
+          <input type="text" name="wa_non" placeholder="0895XXXXXXX" pattern="^0[0-9]{9,12}$"
+            title="Diawali 0, 10–13 digit" required>
+        </label>
+      </div>
 
-                <label>Nomor Unit
-                    <input type="text" name="unit_penghuni" placeholder="1.11.0X" pattern="[A-Za-z0-9\.]+"
-                        title="Boleh huruf, angka, dan titik" required>
-                </label>
+      <!-- Aktivitas -->
+      <div id="formAktivitas" class="hidden">
+        <h3>Pilih Aktivitas</h3>
+        <div class="radio-group">
+          <label class="radio-btn"><input type="radio" name="aktivitas" value="senam"><span>Senam</span></label>
+          <label class="radio-btn"><input type="radio" name="aktivitas" value="tenis"><span>Tenis</span></label>
+          <label class="radio-btn"><input type="radio" name="aktivitas" value="tenis meja"><span>Tenis Meja</span></label>
+          <label class="radio-btn"><input type="radio" name="aktivitas" value="doa"><span>Doa</span></label>
+          <label class="radio-btn"><input type="radio" name="aktivitas" value="lain-lain"><span>Lain-lain</span></label>
+        </div>
+      </div>
 
-                <label>No. WhatsApp
-                    <input type="text" name="wa_penghuni" placeholder="0895XXXXXXX" pattern="^0[0-9]{9,12}$"
-                        title="Nomor WA harus diawali 0 dan terdiri dari 10–13 digit angka" required>
-                </label>
-            </div>
+      <!-- Senam -->
+      <div id="formSenam" class="hidden">
+        <label>Pilih Grup Senam
+          <select name="grup_senam" id="grupSenam">
+            <option value="">-- Pilih Grup --</option>
+            <option value="bu linda">Bu Linda</option>
+            <option value="bu retno">Bu Retno</option>
+          </select>
+        </label>
+        <div id="jadwalContainer"></div>
+      </div>
 
-            <!-- Non Penghuni -->
-            <div id="formNonPenghuni" class="hidden">
-                <label>Nama
-                    <input type="text" name="nama_non" placeholder="Masukkan nama lengkap"
-                        pattern="^[A-Za-zÀ-ž\s]{2,50}$"
-                        title="Nama hanya boleh berisi huruf dan spasi (tanpa angka atau simbol)" required>
-                </label>
+      <!-- Umum (non-senam) -->
+      <div id="formUmum" class="hidden">
+        <div id="kegiatanLain" class="hidden">
+          <label>Untuk kegiatan apa?
+            <input type="text" name="kegiatan_lain" placeholder="Lomba Mewarnai"/>
+          </label>
+        </div>
 
-                <label>No. WhatsApp
-                    <input type="text" name="wa_non" placeholder="0895XXXXXXX" pattern="^0[0-9]{9,12}$"
-                        title="Nomor WA harus diawali 0 dan terdiri dari 10–13 digit angka" required>
-                </label>
-            </div>
+        <label>Tanggal
+          <input type="date" name="tanggal">
+        </label>
 
+        <div class="time-row">
+          <label>Jam Mulai
+            <select name="jam_mulai" id="jamMulai" placeholder="07:00"></select>
+          </label>
+          <span class="time-separator">–</span>
+          <label>Jam Akhir
+            <select name="jam_selesai" id="jamSelesai" placeholder="16:00"></select>
+          </label>
+        </div>
 
-            <div id="formAktivitas" class="hidden">
-                <h3>Pilih Aktivitas</h3>
-                <div class="radio-group">
-                    <label class="radio-btn"><input type="radio" name="aktivitas"
-                            value="senam"><span>Senam</span></label>
-                    <label class="radio-btn"><input type="radio" name="aktivitas"
-                            value="tenis"><span>Tenis</span></label>
-                    <label class="radio-btn"><input type="radio" name="aktivitas" value="tenis meja"><span>Tenis
-                            Meja</span></label>
-                    <label class="radio-btn"><input type="radio" name="aktivitas" value="doa"><span>Doa</span></label>
-                    <label class="radio-btn"><input type="radio" name="aktivitas"
-                            value="lain-lain"><span>Lain-lain</span></label>
-                </div>
-            </div>
+        <label>Jumlah Peserta
+          <input type="number" name="jumlah_peserta" min="1" placeholder="10"/>
+        </label>
 
-            <div id="formSenam" class="hidden">
-                <label>Pilih Grup Senam
-                    <select name="grup_senam" id="grupSenam">
-                        <option value="">-- Pilih Grup --</option>
-                        <option value="bu linda">Bu Linda</option>
-                        <option value="bu retno">Bu Retno</option>
-                    </select>
-                </label>
-                <div id="jadwalContainer"></div>
-            </div>
+        <label>Permintaan Khusus
+          <textarea name="permintaan" placeholder="Contoh: butuh meja tambahan"></textarea>
+        </label>
+      </div>
 
-            <div id="formUmum" class="hidden">
-                <div id="kegiatanLain" class="hidden">
-                    <label>Untuk kegiatan apa?
-                        <input type="text" name="kegiatan_lain" placeholder="Lomba Mewarnai" />
-                    </label>
-                </div>
+      <button id="btnSubmit" type="submit" disabled>Kirim Reservasi</button>
+    </form>
+  </main>
 
-                <label>Tanggal
-                    <input type="date" name="tanggal">
-                </label>
+  <footer>
+    <p>© 2025 Form Reservasi Kondominium Puncak Marina | Made by V7</p>
+  </footer>
 
-                <div class="time-row">
-                    <label>Jam Mulai
-                        <select name="jam_mulai" id="jamMulai" placeholder="07:00"></select>
-                    </label>
-                    <span class="time-separator">–</span>
-                    <label>Jam Akhir
-                        <select name="jam_selesai" id="jamSelesai" placeholder="16:00"></select>
-                    </label>
-                </div>
-
-                <label>Jumlah Peserta
-                    <input type="number" name="jumlah_peserta" min="1" placeholder="10" />
-                </label>
-
-                <label>Permintaan Khusus
-                    <textarea name="permintaan"
-                        placeholder="Saya mau pakai ruangan dengan acara barbeque, ada permainan, boleh atau gak?"></textarea>
-                </label>
-            </div>
-
-
-            <button id="btnSubmit" type="submit" disabled>Kirim Reservasi</button>
-
-        </form>
-    </main>
-
-    <footer>
-        <p>© 2025 Form Reservasi Kondominium Puncak Marina | Made by V7</p>
-    </footer>
-
-    <script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
-
 </html>
